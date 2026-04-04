@@ -1,0 +1,34 @@
+# Model Paths
+teacher_model_path: "./models/gpt2-medium-wikitext"
+student_model_name: "gpt2"
+base_model_name: "gpt2-medium"
+save_path: "./models/gpt2-distilled-bayeslearner"
+
+# Training Hyperparameters
+training:
+  learning_rate: 5.0e-6
+  batch_size: 4
+  gradient_accumulation_steps: 4
+  epochs: 2
+  fp16: true
+  temperature: 2.0
+  alpha: 0.5
+
+# SGLD Specifics
+sgld:
+  burn_in_steps: 3000
+  precondition_decay: 0.95
+
+# Dataset
+dataset:
+  name: "wikitext"
+  subset: "wikitext-2-raw-v1"
+  max_length: 512
+
+# Weight Collection Settings
+sampling:
+  enabled: false
+  start_step: 4000
+  end_step: 10000
+  interval: 500
+  save_dir: "./model_samples"
