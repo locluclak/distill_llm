@@ -66,3 +66,27 @@ class WeightCollectionCallback(TrainerCallback):
             torch.save(sample, sample_path)
             
             print(f"\n[SGLD] Sample collected and saved to {sample_path}")
+
+class SWAGCallback(TrainerCallback):
+    """Callback for SWAG to collect model weights at specific intervals."""
+    def __init__(self, swag_model, collection_steps=None, collect_every_n_steps=None):
+        """
+        Args:
+            swag_model (SWAG): The SWAG tracker instance.
+            collection_steps (list, optional): Specific global steps to collect weights.
+            collect_every_n_steps (int, optional): Collect weights every N steps.
+        """
+        self.swag_model = swag_model
+        self.collection_steps = collection_steps or []
+        self.collect_every_n_steps = collect_every_n_steps
+
+    def on_step_end(self, args, state, control, **kwargs):
+        should_collect = False
+        if state.global_step in self.collection_steps:
+            should_collect = True
+        if self.collect_every_n_steps and state.global_step % self.collect_every_n_steps == 0:
+            should_collect = True
+        
+        if should_collect:
+            self.swag_model.collect_model()
+            print(f"\n[SWAG] Model collected at step {state.global_step}. Total models: {self.swag_model.n_models}")

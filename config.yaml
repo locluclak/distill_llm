@@ -40,3 +40,11 @@ sampling:
   end_step: 10000
   interval: 500
   save_dir: "./model_samples"
+
+# SWAG Specific Settings
+swag:
+  enabled: true
+  max_num_models: 20
+  start_step: 2000
+  interval: 100
+  scale: 0.5

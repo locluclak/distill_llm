@@ -41,3 +41,8 @@ class SGLDDistillationTrainer(DistillationTrainer):
             num_burn_in_steps=2600
         )
         return self.optimizer
+
+class SWAGDistillationTrainer(DistillationTrainer):
+    """Trainer that uses a standard optimizer (AdamW) for distillation, intended to be used with SWAGCallback."""
+    # We don't override create_optimizer, so it uses the default AdamW from Trainer
+    pass
