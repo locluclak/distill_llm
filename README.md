@@ -25,26 +25,26 @@ A complete implementation for SWAG-based distillation is provided in `train_swag
      scale: 0.5     # Scaling for posterior sampling
    ```
 
-2. **Run Training**:
+2. **Run Training (Phase 1: Moment Collection)**:
    Execute the SWAG-specific training script:
    ```bash
    python train_swag.py
    ```
    This will:
-   - Perform distillation using the AdamW optimizer.
-   - Collect weights periodically using `SWAGCallback`.
-   - Evaluate the model using the last weights, the SWA mean weights, and a SWAG posterior sample.
-   - Save the SWA mean model and the full SWAG state.
+   - Perform distillation using a standard optimizer (e.g., AdamW).
+   - **Phase 1:** Collect weights periodically using `SWAGCallback` to calculate the running mean and covariance (moments). This phase shows the **Log Loss** every 10 steps.
+   - **Phase 2 (Post-Training):** Once distillation is finished, the script draws multiple samples from the Gaussian posterior (BMA) to evaluate the Bayesian ensemble performance.
 
-3. **Inference with SWAG**:
-   You can load the SWAG state and sample weights for ensembling:
+3. **Bayesian Inference (BMA)**:
+   You can load the SWAG state and sample weights for ensembling after training is complete:
    ```python
    from src.optimizer import SWAG
    swag_model = SWAG(model)
    swag_model.load("path/to/swag_state.pt")
    
-   # Sample and evaluate
+   # Phase 2: Draw samples from the posterior
    swag_model.sample(scale=0.5)
+   # Evaluate the sampled model
    outputs = model(**inputs)
    ```
 

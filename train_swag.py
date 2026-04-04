@@ -46,16 +46,16 @@ def main():
     student_model = GPT2LMHeadModel.from_pretrained(cfg['student_model_name']).to("cuda")
 
     # 5. Prepare SWAG
+    # This tracker ONLY monitors training progress and maintains mean/variance buffers.
     swag_model = SWAG(student_model, max_num_models=cfg['swag']['max_num_models'])
     
     callbacks = []
     if cfg['swag']['enabled']:
         swag_callback = SWAGCallback(
             swag_model=swag_model,
-            collect_every_n_steps=cfg['swag']['interval']
+            start_step=cfg['swag']['start_step'],
+            interval=cfg['swag']['interval']
         )
-        # Note: In a real scenario, you'd only start collecting after start_step
-        # We can refine the callback to respect start_step
         callbacks.append(swag_callback)
 
     # 6. Pre-Distillation Evaluation
@@ -64,6 +64,8 @@ def main():
     student_pre_ppl = evaluate_ppl(student_model, eval_data, tokenizer, device, "Student (Base)")
 
     # 7. Distillation Setup
+    # - Using 'logging_steps' to show loss during training
+    # - Using standard optimizer (default) as SWAG is used on top of it.
     training_args = TrainingArguments(
         output_dir="./results_swag",
         per_device_train_batch_size=cfg['training']['batch_size'],
@@ -71,8 +73,11 @@ def main():
         num_train_epochs=cfg['training']['epochs'],
         learning_rate=float(cfg['training']['learning_rate']),
         fp16=cfg['training']['fp16'],
-        logging_steps=50,
-        save_strategy="no"
+        logging_steps=10,  # Show log loss every 10 steps
+        evaluation_strategy="steps",
+        eval_steps=100,
+        save_strategy="no",
+        report_to="none"
     )
 
     trainer = SWAGDistillationTrainer(
@@ -87,36 +92,45 @@ def main():
         data_collator=DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False),
     )
 
-    # 8. Execution
-    print("Starting SWAG Distillation...")
+    # 8. Execution - PHASE 1: Moment Collection
+    print("Starting SWAG Distillation Phase 1 (Training & Moment Collection)...")
     trainer.train()
 
-    # 9. Post-Distillation Evaluation
-    print("\n[POST-TRAIN] Running final evaluation...")
+    # 9. Execution - PHASE 2: Bayesian Model Averaging (BMA) & Sampling
+    print("\nStarting Phase 2 (Inference Phase with SWAG)...")
     
-    # Evaluate Standard Student (last weights)
+    # 9.1 Evaluate Standard Student (last weights from SGD/Adam)
+    print("\n[Evaluation] Evaluating model with last training weights...")
     student_last_ppl = evaluate_ppl(student_model, eval_data, tokenizer, device, "Student (Last weights)")
 
-    # Evaluate SWA Mean
-    print("\nLoading SWA mean weights...")
+    # 9.2 Evaluate SWA Mean (Best point estimate)
+    print("\n[Evaluation] Evaluating SWA mean weights...")
     swag_model.get_mean_model()
     student_swa_ppl = evaluate_ppl(student_model, eval_data, tokenizer, device, "Student (SWA Mean)")
 
-    # Evaluate a SWAG sample
-    print("\nSampling from SWAG posterior...")
-    swag_model.sample(scale=cfg['swag']['scale'])
-    student_sample_ppl = evaluate_ppl(student_model, eval_data, tokenizer, device, "Student (SWAG Sample)")
+    # 9.3 Perform Bayesian Model Averaging (BMA) via sampling
+    # Typically, we take multiple samples and ensemble their predictions. 
+    # For perplexity, we can average the loss across samples.
+    num_samples = 3
+    sample_ppls = []
+    print(f"\n[Evaluation] Drawing {num_samples} samples from posterior for BMA...")
+    for i in range(num_samples):
+        swag_model.sample(scale=cfg['swag']['scale'])
+        ppl = evaluate_ppl(student_model, eval_data, tokenizer, device, f"Student (Sample {i+1})")
+        sample_ppls.append(ppl)
+
+    avg_sample_ppl = sum(sample_ppls) / len(sample_ppls)
 
     # Final Summary Table
-    print(f"\n" + "="*40)
+    print(f"\n" + "="*50)
     print(f"   FINAL RESULTS SUMMARY (SWAG)")
-    print(f"="*40)
-    print(f"Teacher PPL:        {teacher_ppl:.2f}")
-    print(f"Student (Before):   {student_pre_ppl:.2f}")
-    print(f"Student (Last):     {student_last_ppl:.2f}")
-    print(f"Student (SWA Mean): {student_swa_ppl:.2f}")
-    print(f"Student (Sample):   {student_sample_ppl:.2f}")
-    print(f"="*40)
+    print(f"="*50)
+    print(f"Teacher PPL:           {teacher_ppl:.2f}")
+    print(f"Student (Before):      {student_pre_ppl:.2f}")
+    print(f"Student (Last Weights): {student_last_ppl:.2f}")
+    print(f"Student (SWA Mean):    {student_swa_ppl:.2f}")
+    print(f"Average Sample PPL:    {avg_sample_ppl:.2f}")
+    print(f"="*50)
 
     # 10. Save results
     # Save the SWA mean model as the final distilled model
