@@ -1,8 +1,8 @@
 # Model Paths
-teacher_model_path: "./models/gpt2-medium-wikitext"
-student_model_name: "gpt2"
-base_model_name: "gpt2-medium"
-save_path: "./models/gpt2-distilled-bayeslearner"
+# teacher_model_path: "./models/gpt2-medium-wikitext"
+# student_model_name: "gpt2"
+# base_model_name: "gpt2-medium"
+# save_path: "./models/gpt2-distilled-bayeslearner"
 
 
 # # Colab Model Paths
