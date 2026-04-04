@@ -38,6 +38,6 @@ class SGLDDistillationTrainer(DistillationTrainer):
             self.model.parameters(),
             lr=self.args.learning_rate,
             num_pseudo_batches=num_pseudo_batches,
-            num_burn_in_steps=3000
+            num_burn_in_steps=2600
         )
         return self.optimizer

@@ -76,8 +76,6 @@ def main():
         learning_rate=float(cfg['training']['learning_rate']),
         fp16=cfg['training']['fp16'],
         logging_steps=50,
-        evaluation_strategy="steps", # Now it will use eval_data
-        eval_steps=500,               # Evaluate every 500 steps
         save_strategy="no"
     )
 
