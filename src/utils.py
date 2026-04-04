@@ -14,22 +14,35 @@ def evaluate_ppl(model, eval_dataset, tokenizer, device="cuda", name="Model"):
     """Replicates the notebook's Perplexity evaluation logic."""
     model.eval()
     total_loss = 0
-    
-    # Use a DataLoader for efficiency
-    data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
-    eval_dataloader = DataLoader(eval_dataset, batch_size=4, collate_fn=data_collator)
+    # Note: We skip the DataCollator for LM because evaluate_perplexity 
+    # used raw input_ids as labels without special padding masks (-100).
+    from torch.utils.data import DataLoader
 
-    print(f"--- Evaluating {name} ---")
+    # Batch size 1 is required to match the "per-entry" average of evaluate_perplexity
+    # If you use a higher batch size, you'd be averaging the average of batches, 
+    # which is mathematically different.
+    eval_dataloader = DataLoader(eval_dataset, batch_size=1)
+
+    print(f"--- Evaluating {name} (Replicated Logic) ---")
     
     with torch.no_grad():
         for batch in eval_dataloader:
-            # Move batch to device
-            input_ids = batch["input_ids"].to(device)
-            labels = batch["labels"].to(device)
+            # Replicating entry["input_ids"] logic
+            # input_ids = batch["input_ids"].to(device)
+            input_ids = torch.tensor(batch["input_ids"]).to(device)
+            # Skip empty sequences as seen in your second function
+            if input_ids.dim() == 1:
+                input_ids = input_ids.unsqueeze(0)
+            if input_ids.shape[1] == 0: 
+                continue
             
-            outputs = model(input_ids, labels=labels)
-            total_loss += outputs.loss.item() * input_ids.size(0)
+            # In evaluate_perplexity, labels = input_ids
+            outputs = model(input_ids, labels=input_ids)
+            
+            # Summing raw loss items (unweighted by tokens or batch size)
+            total_loss += outputs.loss.item()
 
+    # Averaging by the number of entries
     avg_loss = total_loss / len(eval_dataset)
     perplexity = math.exp(avg_loss)
     

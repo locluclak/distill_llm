@@ -4,6 +4,14 @@ student_model_name: "gpt2"
 base_model_name: "gpt2-medium"
 save_path: "./models/gpt2-distilled-bayeslearner"
 
+
+# # Colab Model Paths
+teacher_model_path: "/content/distill_llm/models/gpt2-medium-wikitext"
+student_model_name: "gpt2"
+base_model_name: "gpt2-medium"
+save_path: "/content/distill_llm/models/gpt2-distilled-bayeslearner"
+
+
 # Training Hyperparameters
 training:
   learning_rate: 5.0e-6
