@@ -104,4 +104,4 @@ class SWAGCallback(TrainerCallback):
             # Note: we use (step - start_step) to ensure the first collection is at start_step
             if (state.global_step - self.start_step) % self.interval == 0:
                 self.swag_model.collect_model()
-                # print(f"\n[SWAG] Step {state.global_step}: Model weights collected.")
+                print(f"\n[SWAG] Step {state.global_step}: Model weights collected.")

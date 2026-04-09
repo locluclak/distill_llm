@@ -88,8 +88,8 @@ def main():
         learning_rate=float(cfg['training']['learning_rate']),
         fp16=cfg['training']['fp16'],
         logging_steps=10,  # Show log loss every 10 steps
-        eval_strategy="steps",
-        eval_steps=100,
+        # eval_strategy="steps",
+        # eval_steps=100,
         save_strategy="no",
         report_to="none"
     )
@@ -125,7 +125,7 @@ def main():
     # 9.3 Perform Bayesian Model Averaging (BMA) via sampling
     # Typically, we take multiple samples and ensemble their predictions. 
     # For perplexity, we can average the loss across samples.
-    num_samples = 3
+    num_samples = 5
     sample_ppls = []
     print(f"\n[Evaluation] Drawing {num_samples} samples from posterior for BMA...")
     for i in range(num_samples):
