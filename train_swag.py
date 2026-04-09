@@ -88,7 +88,7 @@ def main():
         learning_rate=float(cfg['training']['learning_rate']),
         fp16=cfg['training']['fp16'],
         logging_steps=10,  # Show log loss every 10 steps
-        evaluation_strategy="steps",
+        eval_strategy="steps",
         eval_steps=100,
         save_strategy="no",
         report_to="none"
