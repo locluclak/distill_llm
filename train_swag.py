@@ -49,11 +49,25 @@ def main():
     # This tracker ONLY monitors training progress and maintains mean/variance buffers.
     swag_model = SWAG(student_model, max_num_models=cfg['swag']['max_num_models'])
     
+    # Calculate total steps for automatic SWAG start (75% of training)
+    num_train_epochs = cfg['training']['epochs']
+    batch_size = cfg['training']['batch_size']
+    grad_accum = cfg['training']['gradient_accumulation_steps']
+    # Number of optimization steps per epoch
+    steps_per_epoch = len(train_data) // (batch_size * grad_accum)
+    total_steps = steps_per_epoch * num_train_epochs
+    
+    # Use 75% as default if not overridden or if using the 75% rule
+    swag_start_step = int(total_steps * 0.75)
+    
+    print(f"\n[SWAG Config] Total expected steps: {total_steps}")
+    print(f"[SWAG Config] SWAG collection will start at step: {swag_start_step} (75% mark)")
+
     callbacks = []
     if cfg['swag']['enabled']:
         swag_callback = SWAGCallback(
             swag_model=swag_model,
-            start_step=cfg['swag']['start_step'],
+            start_step=swag_start_step,
             interval=cfg['swag']['interval']
         )
         callbacks.append(swag_callback)
@@ -118,6 +132,7 @@ def main():
         swag_model.sample(scale=cfg['swag']['scale'])
         ppl = evaluate_ppl(student_model, eval_data, tokenizer, device, f"Student (Sample {i+1})")
         sample_ppls.append(ppl)
+        print(f"\t Sample {i+1} Perplexity: {ppl:.2f}")
 
     avg_sample_ppl = sum(sample_ppls) / len(sample_ppls)
 

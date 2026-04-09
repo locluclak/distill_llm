@@ -69,18 +69,39 @@ class WeightCollectionCallback(TrainerCallback):
 
 class SWAGCallback(TrainerCallback):
     """Callback for SWAG to collect model weights at specific intervals (Training Phase)."""
-    def __init__(self, swag_model, start_step=0, interval=100):
+    def __init__(self, swag_model, start_step=0, interval=100, swa_lr=None):
         """
         Args:
             swag_model (SWAG): The SWAG tracker instance.
             start_step (int): Step to start collecting weights (after burn-in).
             interval (int): Collect weights every N steps.
+            swa_lr (float, optional): Learning rate to use during SWAG phase. 
+                                     If None, will use the LR at start_step.
         """
         self.swag_model = swag_model
         self.start_step = start_step
         self.interval = interval
+        self.swa_lr = swa_lr
+        self._swa_lr_set = False
+
+    def on_step_begin(self, args, state, control, **kwargs):
+        """Ensure learning rate is constant during SWAG phase."""
+        if state.global_step >= self.start_step:
+            optimizer = kwargs.get("optimizer")
+            if optimizer:
+                # If swa_lr is not set, capture current LR at the start of SWAG phase
+                if self.swa_lr is None:
+                    self.swa_lr = optimizer.param_groups[0]['lr']
+                    print(f"\n[SWAG] Step {state.global_step}: Capturing SWAG LR: {self.swa_lr}")
+                
+                # Force constant LR
+                for param_group in optimizer.param_groups:
+                    param_group['lr'] = self.swa_lr
 
     def on_step_end(self, args, state, control, **kwargs):
-        if state.global_step >= self.start_step and state.global_step % self.interval == 0:
-            self.swag_model.collect_model()
-            # We do NOT sample here. We only update the running mean and covariance.
+        if state.global_step >= self.start_step:
+            # Collect model at intervals
+            # Note: we use (step - start_step) to ensure the first collection is at start_step
+            if (state.global_step - self.start_step) % self.interval == 0:
+                self.swag_model.collect_model()
+                # print(f"\n[SWAG] Step {state.global_step}: Model weights collected.")
