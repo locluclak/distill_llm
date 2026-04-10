@@ -112,6 +112,7 @@ def main():
 
     # 9. Execution - PHASE 2: Bayesian Model Averaging (BMA) & Sampling
     print("\nStarting Phase 2 (Inference Phase with SWAG)...")
+    student_model.eval()
     
     # 9.1 Evaluate Standard Student (last weights from SGD/Adam)
     print("\n[Evaluation] Evaluating model with last training weights...")
@@ -127,12 +128,45 @@ def main():
     # For perplexity, we can average the loss across samples.
     num_samples = 5
     sample_ppls = []
+    
+    # Prepare for output difference check
+    test_prompt = "The future of artificial intelligence will be"
+    test_input = tokenizer(test_prompt, return_tensors="pt").to(device)
+    sample_outputs = []
+
     print(f"\n[Evaluation] Drawing {num_samples} samples from posterior for BMA...")
     for i in range(num_samples):
         swag_model.sample(scale=cfg['swag']['scale'])
+        
+        # Check output for this sample
+        with torch.no_grad():
+            outputs = student_model(**test_input)
+            # Get logits for the last token to compare differences
+            last_token_logits = outputs.logits[0, -1, :]
+            top_token_id = torch.argmax(last_token_logits).item()
+            top_token = tokenizer.decode([top_token_id])
+            top_logit_val = last_token_logits[top_token_id].item()
+            sample_outputs.append((top_token, top_logit_val))
+        
         ppl = evaluate_ppl(student_model, eval_data, tokenizer, device, f"Student (Sample {i+1})")
         sample_ppls.append(ppl)
-        print(f"\t Sample {i+1} Perplexity: {ppl:.2f}")
+        print(f"\t Sample {i+1} Perplexity: {ppl:.2f} | Top prediction: '{top_token.strip()}' (logit: {top_logit_val:.4f})")
+
+    # Check if outputs are different
+    unique_tokens = set([out[0] for out in sample_outputs])
+    logit_values = [out[1] for out in sample_outputs]
+    logit_diff = max(logit_values) - min(logit_values)
+    
+    print(f"\n" + "-"*30)
+    print(f"Diversity Check (Prompt: '{test_prompt}'):")
+    print(f"Unique top-1 tokens: {len(unique_tokens)}")
+    print(f"Max logit difference: {logit_diff:.6f}")
+    
+    if len(unique_tokens) > 1 or logit_diff > 1e-4:
+        print("RESULT: Sampled models are PRODUCING DIFFERENT outputs. Posterior sampling is effective.")
+    else:
+        print("RESULT: Sampled models are producing identical outputs. Scaling or collection might be insufficient.")
+    print("-"*30)
 
     avg_sample_ppl = sum(sample_ppls) / len(sample_ppls)
 
