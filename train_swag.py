@@ -132,37 +132,41 @@ def main():
     # Prepare for output difference check
     test_prompt = "The future of artificial intelligence will be"
     test_input = tokenizer(test_prompt, return_tensors="pt").to(device)
-    sample_outputs = []
+    sample_generations = []
 
     print(f"\n[Evaluation] Drawing {num_samples} samples from posterior for BMA...")
     for i in range(num_samples):
         swag_model.sample(scale=cfg['swag']['scale'])
         
-        # Check output for this sample
+        # Generate text for this sample
         with torch.no_grad():
+            # Use greedy generation to isolate the effect of weight sampling
+            gen_ids = student_model.generate(
+                **test_input, 
+                max_new_tokens=20, 
+                do_sample=False, 
+                pad_token_id=tokenizer.eos_token_id
+            )
+            generated_text = tokenizer.decode(gen_ids[0], skip_special_tokens=True)
+            sample_generations.append(generated_text)
+            
+            # Also get logits for the first new token for numerical comparison
             outputs = student_model(**test_input)
-            # Get logits for the last token to compare differences
             last_token_logits = outputs.logits[0, -1, :]
-            top_token_id = torch.argmax(last_token_logits).item()
-            top_token = tokenizer.decode([top_token_id])
-            top_logit_val = last_token_logits[top_token_id].item()
-            sample_outputs.append((top_token, top_logit_val))
+            top_logit_val = torch.max(last_token_logits).item()
         
-        ppl = evaluate_ppl(student_model, eval_data, tokenizer, device, f"Student (Sample {i+1})")
+        ppl = evaluate_ppl(student_model, eval_data, tokenizer, device, f"Sample {i+1}")
         sample_ppls.append(ppl)
-        print(f"\t Sample {i+1} Perplexity: {ppl:.2f} | Top prediction: '{top_token.strip()}' (logit: {top_logit_val:.4f})")
+        print(f"\t Sample {i+1} | PPL: {ppl:.2f} | Logit: {top_logit_val:.4f} | Text: \"{generated_text.replace('\n', ' ')}\"")
 
     # Check if outputs are different
-    unique_tokens = set([out[0] for out in sample_outputs])
-    logit_values = [out[1] for out in sample_outputs]
-    logit_diff = max(logit_values) - min(logit_values)
+    unique_generations = set(sample_generations)
     
     print(f"\n" + "-"*30)
     print(f"Diversity Check (Prompt: '{test_prompt}'):")
-    print(f"Unique top-1 tokens: {len(unique_tokens)}")
-    print(f"Max logit difference: {logit_diff:.6f}")
+    print(f"Unique generations: {len(unique_generations)} / {num_samples}")
     
-    if len(unique_tokens) > 1 or logit_diff > 1e-4:
+    if len(unique_generations) > 1:
         print("RESULT: Sampled models are PRODUCING DIFFERENT outputs. Posterior sampling is effective.")
     else:
         print("RESULT: Sampled models are producing identical outputs. Scaling or collection might be insufficient.")
