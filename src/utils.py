@@ -93,15 +93,21 @@ class SWAGCallback(TrainerCallback):
                 if self.swa_lr is None:
                     self.swa_lr = optimizer.param_groups[0]['lr']
                     print(f"\n[SWAG] Step {state.global_step}: Capturing SWAG LR: {self.swa_lr}")
-                
-                # Force constant LR
+
+                # Force constant LR for all parameter groups
                 for param_group in optimizer.param_groups:
                     param_group['lr'] = self.swa_lr
 
     def on_step_end(self, args, state, control, **kwargs):
+        # Override LR again in case the scheduler updated it at the end of the step
         if state.global_step >= self.start_step:
+            optimizer = kwargs.get("optimizer")
+            if optimizer and self.swa_lr is not None:
+                for param_group in optimizer.param_groups:
+                    param_group['lr'] = self.swa_lr
+
             # Collect model at intervals
             # Note: we use (step - start_step) to ensure the first collection is at start_step
             if (state.global_step - self.start_step) % self.interval == 0:
                 self.swag_model.collect_model()
-                print(f"\n[SWAG] Step {state.global_step}: Model weights collected.")
+                print(f"\n[SWAG] Step {state.global_step}: Model weights collected. LR: {self.swa_lr}")
