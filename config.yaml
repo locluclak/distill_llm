@@ -46,5 +46,5 @@ swag:
   enabled: true
   max_num_models: 20
   start_step: 2000
-  interval: 50
+  interval: 30
   scale: 1.0
