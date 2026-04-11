@@ -88,26 +88,40 @@ class SWAGCallback(TrainerCallback):
         """Ensure learning rate is constant during SWAG phase."""
         if state.global_step >= self.start_step:
             optimizer = kwargs.get("optimizer")
+            scheduler = kwargs.get("lr_scheduler")
+
             if optimizer:
                 # If swa_lr is not set, capture current LR at the start of SWAG phase
                 if self.swa_lr is None:
                     self.swa_lr = optimizer.param_groups[0]['lr']
                     print(f"\n[SWAG] Step {state.global_step}: Capturing SWAG LR: {self.swa_lr}")
 
-                # Force constant LR for all parameter groups
+                # Force constant LR for all parameter groups in the optimizer
                 for param_group in optimizer.param_groups:
                     param_group['lr'] = self.swa_lr
+
+            if scheduler and self.swa_lr is not None:
+                # Override scheduler's base_lrs and last_lr to stop it from decaying in logs/steps
+                if hasattr(scheduler, 'base_lrs'):
+                    scheduler.base_lrs = [self.swa_lr] * len(optimizer.param_groups)
+                if hasattr(scheduler, '_last_lr'):
+                    scheduler._last_lr = [self.swa_lr] * len(optimizer.param_groups)
 
     def on_step_end(self, args, state, control, **kwargs):
         # Override LR again in case the scheduler updated it at the end of the step
         if state.global_step >= self.start_step:
             optimizer = kwargs.get("optimizer")
+            scheduler = kwargs.get("lr_scheduler")
+
             if optimizer and self.swa_lr is not None:
                 for param_group in optimizer.param_groups:
                     param_group['lr'] = self.swa_lr
 
+            if scheduler and self.swa_lr is not None:
+                if hasattr(scheduler, '_last_lr'):
+                    scheduler._last_lr = [self.swa_lr] * len(optimizer.param_groups)
+
             # Collect model at intervals
-            # Note: we use (step - start_step) to ensure the first collection is at start_step
             if (state.global_step - self.start_step) % self.interval == 0:
                 self.swag_model.collect_model()
-                print(f"\n[SWAG] Step {state.global_step}: Model weights collected. LR: {self.swa_lr}")
+                print(f"\n[SWAG] Step {state.global_step}: Model weights collected. LR forced to: {self.swa_lr}")
